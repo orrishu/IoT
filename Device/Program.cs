@@ -3,7 +3,7 @@ using Microsoft.Extensions.Hosting;
 using Serilog;
 using System;
 
-namespace Receiver
+namespace Device
 {
     class Program
     {

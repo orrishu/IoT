@@ -23,42 +23,40 @@ namespace Publisher
         {
             _bus = bus;
             _logger = logger;
-            _queue = new Queue("ExampleQueue");
+            // The gateway should subscribe to the status queue.
+            _queue = new Queue("StatusQueue");
             _queue.Arguments.Add("x-max-priority", 10);
+            // The gateway should publish to each device by its topic.
             //_exchange = new Exchange("RADIO");    //need to create that manually and bind queue to it manually so it will work
-            //The gateway should subscribe to the status queue.
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            int count = 100;
+            // The gateway should subscribe to the status queue... :
+            //subscribe to queue. this will also create it if it does not exist
+            var sub = await _bus.SendReceive.ReceiveAsync<StatusMessage>(_queue.Name, OnStatusMessageReceived, x => { }, cancellationToken: stoppingToken);
+            //need to register to the dispose of the subscription.
+            stoppingToken.Register(sub.Dispose);
+
+            int count = 10;
             while (!stoppingToken.IsCancellationRequested && count-- > 0)
             {
-                _logger.LogInformation("Publishing message {count}", count);
-                try
-                {
-                    var body = new MessageTemplate
-                    {
-                        MessageId = count,
-                        MessageSubject = $"Hello {count}"
-                    };
-                    //use the simple config:
-                    await _bus.SendReceive.SendAsync(_queue.Name, body, cancellationToken: stoppingToken);
+                //The gateway should publish to each device by its topic ... :
+                // Todo: check how device ids will be known to the gateway.
+                // also... check with Amir, it somehow works although I forgot to add the exchange here :)
+                await _bus.PubSub.PublishAsync(new CommandMessage { 
+                    Command = $"New command from gateway: {count}" 
+                }, "Device_1", cancellationToken: stoppingToken);  // 'Device_1' is hard coded from the only device on POC
 
-                    //advanced config with message expiration (TTL):
-                    //var msg = new Message<EmailMessage>(body);
-                    //if (count != 9999)
-                    //    msg.Properties.Expiration = "10000";
-
-                    //await _bus.Advanced.PublishAsync(_exchange, string.Empty, true, msg);
-
-                    await Task.Delay(100, stoppingToken);
-                }
-                catch (Exception e)
-                {
-
-                }
+                await Task.Delay(1000, stoppingToken);
             }
+        }
+
+        private Task OnStatusMessageReceived(StatusMessage statusMessage, CancellationToken cancellationToken)
+        {
+            // When a status message is received from the device, it will be handled here.
+            _logger.LogInformation("Status message received: {Message}", statusMessage.StatusText);
+            return Task.CompletedTask;
         }
     }
 }

@@ -6,34 +6,60 @@ using SharedLib;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Device.Models;
 
-namespace Receiver
+namespace Device
 {
     internal class Worker : BackgroundService
     {
         private readonly IBus _bus;
         private readonly ILogger<Worker> _logger;
         private readonly Queue _queue;
-        //private readonly Exchange _exchange;
+        private readonly Exchange _exchange;
+        private readonly string _device_id = "Device_1";    // Todo: move to config.
 
         public Worker(IBus bus, ILogger<Worker> logger)
         {
             _bus = bus;
             _logger = logger;
-            _queue = new Queue("ExampleQueue");
+            // Each device publishes to same queue;
+            _queue = new Queue("StatusQueue");
             _queue.Arguments.Add("x-max-priority", 10);
-            //Each device should subscribe to exchange with its own topic.
-            //_exchange = new Exchange("CommandQueue");    //need to create that manually and bind queue to it manually so it will work
+            // Each device should subscribe to exchange with its own topic.
+            _exchange = new Exchange("CommandExchange");    //need to create that manually and bind queue to it manually so it will work
 
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             _logger.LogInformation("Hello");
-            //subscribe to queue. this will also create it if it does not exist
-            var sub = await _bus.SendReceive.ReceiveAsync<MessageTemplate>(_queue.Name, OnMessageReceived, x => { }, cancellationToken: stoppingToken);
-            //need to register to the dispose of the subscription.
-            stoppingToken.Register(sub.Dispose);
+            
+            // Each device should subscribe to exchange with its own topic... : 
+            using var subscription = await _bus.PubSub.SubscribeAsync<CommandMessage>(
+                    EasyNetQHelper.GetSubscription<CommandMessage, Worker>(),
+                    HandleCommand,
+                    options => options.WithTopic(_device_id).WithQueueName("CommandQueue"),
+                    stoppingToken);
+
+            // Each device publishes to same queue ... :
+            try
+            {
+                var body = new StatusMessage
+                {
+                    StatusText = $"Status from {_device_id}: Hello gateway"
+                };
+                //use the simple config:
+                await _bus.SendReceive.SendAsync(_queue.Name, body, cancellationToken: stoppingToken);
+
+                await Task.Delay(100, stoppingToken);
+            }
+            catch (Exception e)
+            {
+
+            }
+
+            //await cancellationToken.AsTask();
+
             //this will allow task to run even if GC will dispose;
             var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             stoppingToken.Register(tcs.SetResult);
@@ -41,10 +67,12 @@ namespace Receiver
             await tcs.Task;
         }
 
-        private Task OnMessageReceived(MessageTemplate emailMessage, CancellationToken cancellationToken)
+        private async Task HandleCommand(CommandMessage commandMessage, CancellationToken cancellationToken)
         {
-            _logger.LogInformation("Message received: {MessageId}", emailMessage.MessageId);
-            return Task.CompletedTask;
+            //when command message is received from the gateway, it will be handled here. 
+            _logger.LogInformation("CommandMessage received: {Message}", commandMessage.Command);
+            await Task.Delay(1000, cancellationToken);
+            //return Task.CompletedTask;    //?
         }
     }
 }
