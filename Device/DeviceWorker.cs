@@ -10,15 +10,15 @@ using Device.Models;
 
 namespace Device
 {
-    internal class Worker : BackgroundService
+    internal class DeviceWorker : BackgroundService
     {
         private readonly IBus _bus;
-        private readonly ILogger<Worker> _logger;
+        private readonly ILogger<DeviceWorker> _logger;
         private readonly Queue _queue;
         private readonly Exchange _exchange;
         private readonly string _device_id = "Device_1";    // Todo: move to config.
 
-        public Worker(IBus bus, ILogger<Worker> logger)
+        public DeviceWorker(IBus bus, ILogger<DeviceWorker> logger)
         {
             _bus = bus;
             _logger = logger;
@@ -36,7 +36,7 @@ namespace Device
             
             // Each device should subscribe to exchange with its own topic... : 
             using var subscription = await _bus.PubSub.SubscribeAsync<CommandMessage>(
-                    EasyNetQHelper.GetSubscription<CommandMessage, Worker>(),
+                    EasyNetQHelper.GetSubscription<CommandMessage, DeviceWorker>(),
                     HandleCommand,
                     options => options.WithTopic(_device_id).WithQueueName("CommandQueue"),
                     stoppingToken);

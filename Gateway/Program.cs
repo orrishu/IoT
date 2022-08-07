@@ -16,7 +16,7 @@ namespace Publisher
             Host.CreateDefaultBuilder(args)
                 .ConfigureServices((hostContext, services) =>
                 {
-                    services.AddHostedService<Worker>();
+                    services.AddHostedService<GatewayWorker>();
                     services.RegisterEasyNetQ("host=localhost");
                 })
             .UseSerilog((hostingContext, loggerConfiguration) => loggerConfiguration
