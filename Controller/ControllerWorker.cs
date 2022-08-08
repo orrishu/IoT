@@ -23,8 +23,8 @@ namespace Controller
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             // Controller subscribes to gateway status messages ... :
-            using var subscription = await _bus.PubSub.SubscribeAsync<ControllerStatusMessage>(
-                    EasyNetQHelper.GetSubscription<StatusMessage, ControllerWorker>(),
+            using var subscription = await _bus.PubSub.SubscribeAsync<GatewayStatusMessage>(
+                    EasyNetQHelper.GetSubscription<GatewayStatusMessage, ControllerWorker>(),
                     HandleStatusMessage,
                     options => options.WithQueueName("ContollerStatusQueue"),
                     stoppingToken);
@@ -44,7 +44,7 @@ namespace Controller
             }
         }
 
-        private async Task HandleStatusMessage(ControllerStatusMessage statusMessage, CancellationToken cancellationToken)
+        private async Task HandleStatusMessage(GatewayStatusMessage statusMessage, CancellationToken cancellationToken)
         {
             //when command message is received from the gateway, it will be handled here. 
             _logger.LogInformation("CommandMessage received: {Message}", statusMessage.StatusText);

@@ -25,7 +25,7 @@ namespace Publisher
             _bus = bus;
             _logger = logger;
             // The gateway should subscribe to the status queue.
-            _statusQueue = new Queue("StatusQueue");
+            _statusQueue = new Queue("DeviceStatusQueue");
             _statusQueue.Arguments.Add("x-max-priority", 10);
             // The gateway should subscribe also to the controller command queue.
             _commandQueue = new Queue("ControllerCommandQueue");
@@ -39,7 +39,7 @@ namespace Publisher
         {
             // The gateway should subscribe to the status queue... :
             //subscribe to status queue. this will also create it if it does not exist
-            var sub = await _bus.SendReceive.ReceiveAsync<StatusMessage>(_statusQueue.Name, OnStatusMessageReceived, x => { }, cancellationToken: stoppingToken);
+            var sub = await _bus.SendReceive.ReceiveAsync<DeviceStatusMessage>(_statusQueue.Name, OnStatusMessageReceived, x => { }, cancellationToken: stoppingToken);
             //need to register to the dispose of the subscription.
             stoppingToken.Register(sub.Dispose);
 
@@ -53,18 +53,18 @@ namespace Publisher
         private async Task OnCommandMessageReceived(ControllerCommandMessage commandMessage, CancellationToken cancellationToken)
         {
             _logger.LogInformation("Controller command message received: {Message}", commandMessage.Command);
-            await _bus.PubSub.PublishAsync(new CommandMessage
+            await _bus.PubSub.PublishAsync(new GatewayCommandMessage
             {
                 Command = $"New command from gateway: {commandMessage.Command}"
             }, "Device_1", cancellationToken: cancellationToken);  // 'Device_1' is hard coded from the only device on POC
         }
 
-        private async Task OnStatusMessageReceived(StatusMessage statusMessage, CancellationToken cancellationToken)
+        private async Task OnStatusMessageReceived(DeviceStatusMessage statusMessage, CancellationToken cancellationToken)
         {
             // When a status message is received from the device, it will be handled here.
             _logger.LogInformation("Status message received: {Message}", statusMessage.StatusText);
             //send it to the controller:
-            var body = new ControllerStatusMessage
+            var body = new GatewayStatusMessage
             {
                 StatusText = $"Status from gateway: Hello controller"
             };

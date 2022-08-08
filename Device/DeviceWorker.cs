@@ -23,7 +23,7 @@ namespace Device
             _bus = bus;
             _logger = logger;
             // Each device publishes to same queue;
-            _queue = new Queue("StatusQueue");
+            _queue = new Queue("DeviceStatusQueue");
             _queue.Arguments.Add("x-max-priority", 10);
             // Each device should subscribe to exchange with its own topic.
             _exchange = new Exchange("CommandExchange");    //need to create that manually and bind queue to it manually so it will work
@@ -35,8 +35,8 @@ namespace Device
             _logger.LogInformation("Hello");
             
             // Each device should subscribe to exchange with its own topic... : 
-            using var subscription = await _bus.PubSub.SubscribeAsync<CommandMessage>(
-                    EasyNetQHelper.GetSubscription<CommandMessage, DeviceWorker>(),
+            using var subscription = await _bus.PubSub.SubscribeAsync<GatewayCommandMessage>(
+                    EasyNetQHelper.GetSubscription<GatewayCommandMessage, DeviceWorker>(),
                     HandleCommand,
                     options => options.WithTopic(_device_id).WithQueueName("CommandQueue"),
                     stoppingToken);
@@ -44,7 +44,7 @@ namespace Device
             // Each device publishes to same queue ... :
             try
             {
-                var body = new StatusMessage
+                var body = new DeviceStatusMessage
                 {
                     StatusText = $"Status from {_device_id}: Hello gateway"
                 };
@@ -67,7 +67,7 @@ namespace Device
             await tcs.Task;
         }
 
-        private async Task HandleCommand(CommandMessage commandMessage, CancellationToken cancellationToken)
+        private async Task HandleCommand(GatewayCommandMessage commandMessage, CancellationToken cancellationToken)
         {
             //when command message is received from the gateway, it will be handled here. 
             _logger.LogInformation("CommandMessage received: {Message}", commandMessage.Command);
