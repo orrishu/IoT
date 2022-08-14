@@ -17,6 +17,7 @@ namespace Device
         private readonly Queue _queue;
         private readonly Exchange _exchange;
         private readonly string _device_id = "Device_1";    // Todo: move to config.
+        private bool _faucetOpen = false;
 
         public DeviceWorker(IBus bus, ILogger<DeviceWorker> logger)
         {
@@ -42,24 +43,31 @@ namespace Device
                     stoppingToken);
 
             // Each device publishes to same queue ... :
-            try
+            int count = 100;
+            while (!stoppingToken.IsCancellationRequested && count-- > 0 && !_faucetOpen)
             {
-                var body = new DeviceStatusMessage
+                try
                 {
-                    StatusText = $"Status from {_device_id}: Hello gateway"
-                };
-                //use the simple config:
-                await _bus.SendReceive.SendAsync(_queue.Name, body, cancellationToken: stoppingToken);
+                    var body = new DeviceStatusMessage
+                    {
+                        //StatusText = $"Status from {_device_id}: Hello gateway"
+                        DeviceId = _device_id,
+                        Humidity = 100 - count,
+                        IsFaucetOpen = _faucetOpen
+                    };
+                    //use the simple config:
+                    await _bus.SendReceive.SendAsync(_queue.Name, body, cancellationToken: stoppingToken);
 
-                await Task.Delay(100, stoppingToken);
+                    await Task.Delay(1000, stoppingToken);
+                }
+                catch (Exception e)
+                {
+                    _logger.LogError("Error in status message publish: {error}", e.Message);
+                }
+
             }
-            catch (Exception e)
-            {
 
-            }
-
-            //await cancellationToken.AsTask();
-
+            //wait until service is stopped
             //this will allow task to run even if GC will dispose;
             var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             stoppingToken.Register(tcs.SetResult);
@@ -72,6 +80,11 @@ namespace Device
             //when command message is received from the gateway, it will be handled here. 
             _logger.LogInformation("CommandMessage received: {Message}", commandMessage.Command);
             await Task.Delay(1000, cancellationToken);
+
+            if (commandMessage.ShouldOpenFaucet && !_faucetOpen)
+            {
+                _faucetOpen = true;
+            }
             //return Task.CompletedTask;    //?
         }
     }

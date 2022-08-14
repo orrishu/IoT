@@ -10,6 +10,7 @@ namespace Controller
         private readonly ILogger<ControllerWorker> _logger;
         private readonly IBus _bus;
         private readonly Queue _queue;
+        private const int Min_Humidity_Treshold = 80;
 
         public ControllerWorker(ILogger<ControllerWorker> logger, IBus bus)
         {
@@ -29,25 +30,33 @@ namespace Controller
                     options => options.WithQueueName("ContollerStatusQueue"),
                     stoppingToken);
 
-            // Controller publishes to command queue - for gateway ... :
-            int count = 10;
-            while (!stoppingToken.IsCancellationRequested && count-- > 0)
-            {
-                var body = new ControllerCommandMessage
-                {
-                    Command = $"New command from controller: {count}"
-                };
-                //use the simple config:
-                await _bus.SendReceive.SendAsync(_queue.Name, body, cancellationToken: stoppingToken);
-             
-                await Task.Delay(1000, stoppingToken);
-            }
+            //wait until service is stopped
+            var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            stoppingToken.Register(tcs.SetResult);
+
+            await tcs.Task;
         }
 
         private async Task HandleStatusMessage(GatewayStatusMessage statusMessage, CancellationToken cancellationToken)
         {
             //when command message is received from the gateway, it will be handled here. 
-            _logger.LogInformation("CommandMessage received: {Message}", statusMessage.StatusText);
+            _logger.LogInformation("CommandMessage received: {id}, {humidity}%, faucet open: {faucet}", 
+                statusMessage.DeviceId, statusMessage.Humidity, statusMessage.IsFaucetOpen);
+
+            if (!statusMessage.IsFaucetOpen && statusMessage.Humidity <= Min_Humidity_Treshold)
+            {
+                // Controller publishes to command queue - for gateway ... :
+                var body = new ControllerCommandMessage
+                {
+                    Command = $"New command from controller: open the faucet...", 
+                    ShouldOpenFaucet = true, 
+                    ToDeviceId = statusMessage.DeviceId
+                };
+                //use the simple config:
+                await _bus.SendReceive.SendAsync(_queue.Name, body, cancellationToken: cancellationToken);
+
+                await Task.Delay(100, cancellationToken);
+            }
             await Task.Delay(1000, cancellationToken);
             //return Task.CompletedTask;    //?
         }

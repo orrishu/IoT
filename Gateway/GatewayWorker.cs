@@ -18,7 +18,6 @@ namespace Publisher
         private readonly ILogger<GatewayWorker> _logger;
         private readonly Queue _statusQueue;
         private readonly Queue _commandQueue;
-        //private readonly Exchange _exchange;
 
         public GatewayWorker(IBus bus, ILogger<GatewayWorker> logger)
         {
@@ -30,9 +29,6 @@ namespace Publisher
             // The gateway should subscribe also to the controller command queue.
             _commandQueue = new Queue("ControllerCommandQueue");
             _commandQueue.Arguments.Add("x-max-priority", 10);
-
-            // The gateway should publish to each device by its topic.
-            //_exchange = new Exchange("RADIO");    //need to create that manually and bind queue to it manually so it will work
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -53,10 +49,13 @@ namespace Publisher
         private async Task OnCommandMessageReceived(ControllerCommandMessage commandMessage, CancellationToken cancellationToken)
         {
             _logger.LogInformation("Controller command message received: {Message}", commandMessage.Command);
+            // The gateway should publish to each device by its topic.
             await _bus.PubSub.PublishAsync(new GatewayCommandMessage
             {
-                Command = $"New command from gateway: {commandMessage.Command}"
-            }, "Device_1", cancellationToken: cancellationToken);  // 'Device_1' is hard coded from the only device on POC
+                ToDeviceId = commandMessage.ToDeviceId,
+                ShouldOpenFaucet = commandMessage.ShouldOpenFaucet,
+                //Command = $"New command from gateway: {commandMessage.Command}"
+            }, commandMessage.ToDeviceId, cancellationToken: cancellationToken);
         }
 
         private async Task OnStatusMessageReceived(DeviceStatusMessage statusMessage, CancellationToken cancellationToken)
@@ -66,7 +65,10 @@ namespace Publisher
             //send it to the controller:
             var body = new GatewayStatusMessage
             {
-                StatusText = $"Status from gateway: Hello controller"
+                DeviceId = statusMessage.DeviceId,
+                Humidity = statusMessage.Humidity,
+                IsFaucetOpen = statusMessage.IsFaucetOpen,
+                //StatusText = $"Status from gateway: Hello controller"
             };
             await _bus.PubSub.PublishAsync(body, cancellationToken: cancellationToken);
             //return Task.CompletedTask;
