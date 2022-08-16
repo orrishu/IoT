@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "Device": {
+      "commandName": "Project"
+    },
+    "Docker": {
+      "commandName": "Docker"
+    }
+  }
+}

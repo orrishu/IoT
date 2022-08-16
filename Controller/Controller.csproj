@@ -5,12 +5,14 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>dotnet-WorkerService1-D71E2590-9BEB-4CC6-A04F-29D28E511E78</UserSecretsId>
+    <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="EasyNetQ" Version="6.3.1" />
 	<PackageReference Include="EasyNetQ.DI.Microsoft" Version="6.3.1" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="6.0.1" />
+    <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.15.1" />
 	<PackageReference Include="Serilog" Version="2.10.0" />
 	<PackageReference Include="Serilog.Extensions.Hosting" Version="4.2.0" />
 	<PackageReference Include="Serilog.Settings.Configuration" Version="3.3.0" />
