@@ -11,6 +11,7 @@ namespace Controller
         private readonly IBus _bus;
         private readonly Queue _queue;
         private const int Min_Humidity_Treshold = 80;
+        private const int Max_Humidity_Treshold = 100;
 
         public ControllerWorker(ILogger<ControllerWorker> logger, IBus bus)
         {
@@ -50,6 +51,19 @@ namespace Controller
                 {
                     Command = $"New command from controller: open the faucet...", 
                     ShouldOpenFaucet = true, 
+                    ToDeviceId = statusMessage.DeviceId
+                };
+                //use the simple config:
+                await _bus.SendReceive.SendAsync(_queue.Name, body, cancellationToken: cancellationToken);
+
+                await Task.Delay(100, cancellationToken);
+            }
+            else if (statusMessage.IsFaucetOpen && statusMessage.Humidity >= Max_Humidity_Treshold)
+            {
+                var body = new ControllerCommandMessage
+                {
+                    Command = $"New command from controller: close the faucet!",
+                    ShouldOpenFaucet = false,
                     ToDeviceId = statusMessage.DeviceId
                 };
                 //use the simple config:

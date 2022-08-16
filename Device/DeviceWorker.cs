@@ -19,6 +19,8 @@ namespace Device
         private readonly string _device_id = "Device_1";    // Todo: move to config.
         private bool _faucetOpen = false;
         private int _humidity = 0;
+        private const int Min_Humidity_Treshold = 80;
+        private const int Max_Humidity_Treshold = 100;
 
         public DeviceWorker(IBus bus, ILogger<DeviceWorker> logger)
         {
@@ -40,44 +42,38 @@ namespace Device
             using var subscription = await _bus.PubSub.SubscribeAsync<GatewayCommandMessage>(
                     EasyNetQHelper.GetSubscription<GatewayCommandMessage, DeviceWorker>(),
                     HandleCommand,
-                    options => options.WithTopic(_device_id).WithQueueName("CommandQueue"),
+                    options => options.WithTopic(_device_id).WithQueueName("GatewayCommandQueue"),
                     stoppingToken);
 
-            // Each device publishes to same queue ... :
-            /*int count = 100;
-            while (!stoppingToken.IsCancellationRequested && count-- > 0 && !_faucetOpen)
-            {
-                try
-                {
-                    var body = new DeviceStatusMessage
-                    {
-                        //StatusText = $"Status from {_device_id}: Hello gateway"
-                        DeviceId = _device_id,
-                        Humidity = 100 - count,
-                        IsFaucetOpen = _faucetOpen
-                    };
-                    //use the simple config:
-                    await _bus.SendReceive.SendAsync(_queue.Name, body, cancellationToken: stoppingToken);
-
-                    await Task.Delay(1000, stoppingToken);
-                }
-                catch (Exception e)
-                {
-                    _logger.LogError("Error in status message publish: {error}", e.Message);
-                }
-
-            }*/
-
+            //loop endlessly to check the faucet status, send status to controller and hydrate\dehydrate accordingly
             while (!stoppingToken.IsCancellationRequested)
             {
                 if (_faucetOpen)
                 {
                     _logger.LogInformation("Faucet open, dehydrating...");
+                    //send the current status:
+                    var body = new DeviceStatusMessage
+                    {
+                        DeviceId = _device_id,
+                        Humidity = _humidity,
+                        IsFaucetOpen = _faucetOpen
+                    };
+                    await SendStatusMessage(body, stoppingToken);
+                    //dehydrade:
                     await DehydrateHumidity(stoppingToken);
                 }
                 else
                 {
                     _logger.LogInformation("Faucet closed, hydrating...");
+                    //send the current status:
+                    var body = new DeviceStatusMessage
+                    {
+                        DeviceId = _device_id,
+                        Humidity = _humidity,
+                        IsFaucetOpen = _faucetOpen
+                    };
+                    await SendStatusMessage(body, stoppingToken);
+                    //hydrate:
                     await HydrateHumidity(stoppingToken);
                 }
                 await Task.Delay(1000, stoppingToken);
@@ -91,65 +87,42 @@ namespace Device
             await tcs.Task;
         }
 
+        private async Task SendStatusMessage(DeviceStatusMessage body, CancellationToken stoppingToken)
+        {
+            try
+            {
+                //use the simple config:
+                await _bus.SendReceive.SendAsync(_queue.Name, body, cancellationToken: stoppingToken);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError("Error in status message publish: {error}", e.Message);
+            }
+        }
+
         private async Task HydrateHumidity(CancellationToken stoppingToken)
         {
             int count = 0;
-            while (!stoppingToken.IsCancellationRequested && count++ < 100 && !_faucetOpen)
+            while (!stoppingToken.IsCancellationRequested && count++ < 100)
             {
-                try
-                {
-                    _logger.LogInformation($"HydrateHumidity: current humidity is {_humidity}, faucet is closed");
-                    _humidity++;
-                    //var body = new DeviceStatusMessage
-                    //{
-                    //    DeviceId = _device_id,
-                    //    Humidity = _humidity,
-                    //    IsFaucetOpen = _faucetOpen
-                    //};
-                    ////use the simple config:
-                    //await _bus.SendReceive.SendAsync(_queue.Name, body, cancellationToken: stoppingToken);
+                _logger.LogInformation($"HydrateHumidity: current humidity is {_humidity}");
+                _humidity++;
+                if (_humidity >= Max_Humidity_Treshold) break;
 
-                    await Task.Delay(100, stoppingToken);
-                }
-                catch (Exception e)
-                {
-                    _logger.LogError("Error in status message publish: {error}", e.Message);
-                }
-            }
-            if (count >= 100)
-            {
-                _faucetOpen = true;
+                await Task.Delay(1000, stoppingToken);
             }
         }
 
         private async Task DehydrateHumidity(CancellationToken stoppingToken)
         {
             int count = 100;
-            while (!stoppingToken.IsCancellationRequested && count-- > 0 && _faucetOpen)
+            while (!stoppingToken.IsCancellationRequested && count-- > 0)
             {
-                try
-                {
-                    _logger.LogInformation($"DehydrateHumidity: current humidity is {_humidity}, faucet is open");
-                    _humidity--;
-                    //var body = new DeviceStatusMessage
-                    //{
-                    //    DeviceId = _device_id,
-                    //    Humidity = _humidity,
-                    //    IsFaucetOpen = _faucetOpen
-                    //};
-                    ////use the simple config:
-                    //await _bus.SendReceive.SendAsync(_queue.Name, body, cancellationToken: stoppingToken);
+                _logger.LogInformation($"DehydrateHumidity: current humidity is {_humidity}");
+                _humidity--;
+                if (_humidity <= Min_Humidity_Treshold) break;
 
-                    await Task.Delay(100, stoppingToken);
-                }
-                catch (Exception e)
-                {
-                    _logger.LogError("Error in status message publish: {error}", e.Message);
-                }
-            }
-            if (count <= 0)
-            {
-                _faucetOpen = false;
+                await Task.Delay(1000, stoppingToken);
             }
         }
 
@@ -162,6 +135,10 @@ namespace Device
             if (commandMessage.ShouldOpenFaucet && !_faucetOpen)
             {
                 _faucetOpen = true;
+            }
+            else if (!commandMessage.ShouldOpenFaucet && _faucetOpen)
+            {
+                _faucetOpen = false;
             }
             //return Task.CompletedTask;    //?
         }
