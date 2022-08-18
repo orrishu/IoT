@@ -17,7 +17,7 @@ namespace Device
                 .ConfigureServices((hostContext, services) =>
                 {
                     services.AddHostedService<DeviceWorker>();
-                    services.RegisterEasyNetQ("host=localhost");
+                    services.RegisterEasyNetQ("host=localhost");    // for docker: host.docker.internal. move to config!
                 })
             .UseSerilog((hostingContext, loggerConfiguration) => loggerConfiguration
                             .ReadFrom.Configuration(hostingContext.Configuration));
