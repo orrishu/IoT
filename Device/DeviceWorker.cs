@@ -31,7 +31,7 @@ namespace Device
             _queue.Arguments.Add("x-max-priority", 10);
             // Each device should subscribe to exchange with its own topic.
             _exchange = new Exchange("CommandExchange");    //need to create that manually and bind queue to it manually so it will work
-
+            /* test commit */
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
